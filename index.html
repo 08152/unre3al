@@ -1,20 +1,58 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom 3D Unity-Style Engine</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>Mini Unity 3D Engine</title>
+
+<!-- CSS -->
+<link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    <!-- Das 3D Render-Fenster -->
-    <canvas id="gameCanvas"></canvas>
 
-    <!-- UI Overlays analog zu deinem FPS-Code -->
-    <div id="crosshair"></div>
-    <div id="coords">X: 0.00 | Y: 0.00 | Z: 0.00</div>
-    <div id="healthBar"><div id="healthFill"></div></div>
+<!-- =========================
+     TOP TOOLBAR (Unity Style)
+========================= -->
+<div id="topbar">
+    <button onclick="running = true">▶ Play</button>
+    <button onclick="running = false">⏸ Pause</button>
+    <button onclick="location.reload()">⏹ Stop</button>
 
-    <script src="engine.js"></script>
+    <span id="state" style="margin-left:10px;">Idle</span>
+</div>
+
+<!-- =========================
+     MAIN EDITOR LAYOUT
+========================= -->
+<div id="container">
+
+    <!-- LEFT: HIERARCHY -->
+    <div id="hierarchy">
+        <h3>Hierarchy</h3>
+    </div>
+
+    <!-- CENTER: GAME VIEW -->
+    <div id="gameview">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- RIGHT: INSPECTOR -->
+    <div id="inspector">
+        <h3>Inspector</h3>
+        <p>No Selection</p>
+    </div>
+
+</div>
+
+<!-- =========================
+     CONSOLE
+========================= -->
+<div id="console"></div>
+
+<!-- =========================
+     ENGINE
+========================= -->
+<script src="engine.js"></script>
+
 </body>
 </html>
