@@ -1,350 +1,367 @@
-// ==========================================
-// 1. ENGINE MATHEMATICS (Vektoren & Matrizen)
-// ==========================================
+/* ==========================================
+   MINI UNITY 3D ENGINE + EDITOR (ONE FILE)
+   ========================================== */
+
+/* =========================
+   1. VECTOR / MATRIX MATH
+========================= */
+
 class Vector3 {
-    constructor(x = 0, y = 0, z = 0) {
-        this.x = x; this.y = y; this.z = z;
+    constructor(x=0,y=0,z=0){
+        this.x=x; this.y=y; this.z=z;
     }
-    set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
-    add(v) { return new Vector3(this.x + v.x, this.y + v.y, this.z + v.z); }
-    sub(v) { return new Vector3(this.x - v.x, this.y - v.y, this.z - v.z); }
-    scale(s) { return new Vector3(this.x * s, this.y * s, this.z * s); }
-    dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
-    cross(v) {
-        return new Vector3(
-            this.y * v.z - this.z * v.y,
-            this.z * v.x - this.x * v.z,
-            this.x * v.y - this.y * v.x
-        );
-    }
-    length() { return Math.sqrt(this.dot(this)); }
-    normalize() {
-        let len = this.length();
-        return len > 0 ? this.scale(1 / len) : new Vector3();
+    add(v){ return new Vector3(this.x+v.x,this.y+v.y,this.z+v.z); }
+    sub(v){ return new Vector3(this.x-v.x,this.y-v.y,this.z-v.z); }
+    scale(s){ return new Vector3(this.x*s,this.y*s,this.z*s); }
+    dot(v){ return this.x*v.x+this.y*v.y+this.z*v.z; }
+    length(){ return Math.sqrt(this.dot(this)); }
+    normalize(){
+        let l=this.length();
+        return l>0?this.scale(1/l):new Vector3();
     }
 }
 
 class Matrix4 {
-    constructor() { this.elements = new Float32Array(16); this.identity(); }
-    identity() {
-        this.elements.fill(0);
-        this.elements[0] = 1; this.elements[5] = 1; this.elements[10] = 1; this.elements[15] = 1;
+    constructor(){
+        this.m=new Float32Array(16);
+        this.identity();
     }
-    static LookAt(eye, target, up) {
-        let zAxis = eye.sub(target).normalize();
-        let xAxis = up.cross(zAxis).normalize();
-        let yAxis = zAxis.cross(xAxis).normalize();
-        let m = new Matrix4();
-        m.elements[0] = xAxis.x; m.elements[1] = yAxis.x; m.elements[2] = zAxis.x;
-        m.elements[4] = xAxis.y; m.elements[5] = yAxis.y; m.elements[6] = zAxis.y;
-        m.elements[8] = xAxis.z; m.elements[9] = yAxis.z; m.elements[10] = zAxis.z;
-        m.elements[12] = -xAxis.dot(eye); m.elements[13] = -yAxis.dot(eye); m.elements[14] = -zAxis.dot(eye);
-        m.elements[15] = 1;
+    identity(){
+        this.m.set([1,0,0,0,
+                    0,1,0,0,
+                    0,0,1,0,
+                    0,0,0,1]);
+    }
+
+    static lookAt(eye,target,up){
+        let z=eye.sub(target).normalize();
+        let x=up.sub(z.scale(up.dot(z))).normalize();
+        let y=z.sub(x.scale(z.dot(x))).normalize();
+
+        let m=new Matrix4();
+        m.m.set([
+            x.x,y.x,z.x,0,
+            x.y,y.y,z.y,0,
+            x.z,y.z,z.z,0,
+            -x.dot(eye),-y.dot(eye),-z.dot(eye),1
+        ]);
         return m;
     }
-    transformVector(v) {
-        let e = this.elements;
-        let x = v.x * e[0] + v.y * e[4] + v.z * e[8] + e[12];
-        let y = v.x * e[1] + v.y * e[5] + v.z * e[9] + e[13];
-        let z = v.x * e[2] + v.y * e[6] + v.z * e[10] + e[14];
-        let w = v.x * e[3] + v.y * e[7] + v.z * e[11] + e[15];
-        if (w !== 1 && w !== 0) { x /= w; y /= w; z /= w; }
-        return new Vector3(x, y, z);
+
+    transform(v){
+        let m=this.m;
+        return new Vector3(
+            v.x*m[0]+v.y*m[4]+v.z*m[8]+m[12],
+            v.x*m[1]+v.y*m[5]+v.z*m[9]+m[13],
+            v.x*m[2]+v.y*m[6]+v.z*m[10]+m[14]
+        );
     }
 }
 
-// ==========================================
-// 2. UNITY-STYLE COMPONENT SYSTEM
-// ==========================================
-class Component {
-    constructor() { this.gameObject = null; }
-    start() {}
-    update(deltaTime) {}
-    render(ctx, viewMatrix, fov, aspect) {}
+/* =========================
+   2. ECS SYSTEM
+========================= */
+
+class Component{
+    constructor(){ this.gameObject=null; }
+    start(){}
+    update(dt){}
+    render(){}
 }
 
-class Transform extends Component {
-    constructor() {
+class Transform extends Component{
+    constructor(){
         super();
-        this.position = new Vector3();
-        this.rotation = new Vector3(); // Yaw, Pitch, Roll
-        this.scale = new Vector3(1, 1, 1);
+        this.position=new Vector3();
+        this.rotation=new Vector3();
     }
 }
 
-class GameObject {
-    constructor(name = "GameObject") {
-        this.name = name;
-        this.components = [];
-        this.transform = this.addComponent(new Transform());
+class GameObject{
+    constructor(name){
+        this.name=name;
+        this.components=[];
+        this.transform=this.addComponent(new Transform());
     }
-    addComponent(component) {
-        component.gameObject = this;
-        this.components.push(component);
-        return component;
+
+    addComponent(c){
+        c.gameObject=this;
+        this.components.push(c);
+        return c;
     }
-    getComponent(type) {
-        return this.components.find(c => c instanceof type);
+
+    getComponent(type){
+        return this.components.find(c=>c instanceof type);
     }
-    start() {
-        this.components.forEach(c => c.start());
-    }
-    update(deltaTime) {
-        this.components.forEach(c => c.update(deltaTime));
-    }
+
+    start(){ this.components.forEach(c=>c.start()); }
+    update(dt){ this.components.forEach(c=>c.update(dt)); }
 }
 
-// ==========================================
-// 3. ENGINE CORE & SCENE SYSTEM
-// ==========================================
-class Scene {
-    constructor() { this.gameObjects = []; }
-    add(gameObject) { this.gameObjects.push(gameObject); }
-    update(deltaTime) {
-        this.gameObjects.forEach(go => go.update(deltaTime));
-    }
+/* =========================
+   3. SCENE
+========================= */
+
+class Scene{
+    constructor(){ this.gameObjects=[]; }
+    add(go){ this.gameObjects.push(go); }
+    update(dt){ this.gameObjects.forEach(g=>g.update(dt)); }
 }
 
-class EngineCore {
-    constructor() {
-        this.canvas = document.getElementById("gameCanvas");
-        this.ctx = this.canvas.getContext("2d");
-        this.currentScene = new Scene();
-        this.lastTime = 0;
-        this.mainCamera = null;
+/* =========================
+   4. ENGINE CORE
+========================= */
 
-        window.addEventListener("resize", () => this.resize());
+class EngineCore{
+    constructor(){
+        this.canvas=document.getElementById("gameCanvas");
+        this.ctx=this.canvas.getContext("2d");
+        this.scene=new Scene();
+        this.camera=null;
+        this.last=0;
+
+        window.addEventListener("resize",()=>this.resize());
         this.resize();
     }
-    resize() {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
+
+    resize(){
+        this.canvas.width=innerWidth;
+        this.canvas.height=innerHeight;
     }
-    start() {
-        this.currentScene.gameObjects.forEach(go => go.start());
-        requestAnimationFrame((t) => this.loop(t));
+
+    start(){
+        this.scene.gameObjects.forEach(g=>g.start());
+        requestAnimationFrame(t=>this.loop(t));
     }
-    loop(currentTime) {
-        let deltaTime = (currentTime - this.lastTime) / 1000;
-        this.lastTime = currentTime;
 
-        // Core Update Loop
-        this.currentScene.update(deltaTime);
+    loop(t){
+        let dt=(t-this.last)/1000;
+        this.last=t;
 
-        // Core Rendering System
-        this.ctx.fillStyle = "#87cfff"; // Sky color
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.scene.update(dt);
 
-        if (this.mainCamera) {
-            let viewMatrix = this.mainCamera.getViewMatrix();
-            let aspect = this.canvas.width / this.canvas.height;
-            
-            // Render 3D Boden-Gitter
-            this.renderGroundGrid(viewMatrix, this.mainCamera.fov, aspect);
+        this.ctx.fillStyle="#87cfff";
+        this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
 
-            // Render alle GameObjects
-            this.currentScene.gameObjects.forEach(go => {
-                go.components.forEach(c => c.render(this.ctx, viewMatrix, this.mainCamera.fov, aspect));
+        if(this.camera){
+            let view=this.camera.getView();
+            this.renderGrid(view);
+            this.scene.gameObjects.forEach(go=>{
+                go.components.forEach(c=>{
+                    if(c.render) c.render(this.ctx,view,this);
+                });
             });
         }
 
-        requestAnimationFrame((t) => this.loop(t));
+        requestAnimationFrame(t=>this.loop(t));
     }
-    renderGroundGrid(viewMatrix, fov, aspect) {
-        this.ctx.strokeStyle = "rgba(255,255,255,0.25)";
-        this.ctx.lineWidth = 1;
-        let size = 50;
-        let step = 5;
-        
-        for (let i = -size; i <= size; i += step) {
-            this.draw3DLine(new Vector3(i, 0, -size), new Vector3(i, 0, size), viewMatrix, fov, aspect);
-            this.draw3DLine(new Vector3(-size, 0, i), new Vector3(size, 0, i), viewMatrix, fov, aspect);
+
+    renderGrid(view){
+        this.ctx.strokeStyle="rgba(255,255,255,0.2)";
+        for(let i=-20;i<=20;i++){
+            this.line3D(new Vector3(i,0,-20),new Vector3(i,0,20),view);
+            this.line3D(new Vector3(-20,0,i),new Vector3(20,0,i),view);
         }
     }
-    draw3DLine(p1, p2, viewMatrix, fov, aspect) {
-        let cam1 = viewMatrix.transformVector(p1);
-        let cam2 = viewMatrix.transformVector(p2);
-        if (cam1.z >= 0 || cam2.z >= 0) return; // Clipping hinter Kamera
 
-        let screen1 = projectToScreen(cam1, fov, aspect, this.canvas.width, this.canvas.height);
-        let screen2 = projectToScreen(cam2, fov, aspect, this.canvas.width, this.canvas.height);
+    line3D(a,b,view){
+        let p1=view.transform(a);
+        let p2=view.transform(b);
+        if(p1.z>0||p2.z>0) return;
+
+        let s1=this.project(p1);
+        let s2=this.project(p2);
 
         this.ctx.beginPath();
-        this.ctx.moveTo(screen1.x, screen1.y);
-        this.ctx.lineTo(screen2.x, screen2.y);
+        this.ctx.moveTo(s1.x,s1.y);
+        this.ctx.lineTo(s2.x,s2.y);
         this.ctx.stroke();
     }
-}
 
-// Hilfsfunktion zur 3D-Projektion auf den 2D Schirm
-function projectToScreen(camPos, fov, aspect, width, height) {
-    let f = 1.0 / Math.tan((fov * Math.PI / 180) / 2);
-    // Beachte: camPos.z ist im Viewspace negativ vor der Kamera
-    let screenX = (camPos.x * f / aspect) / -camPos.z * (width / 2) + (width / 2);
-    let screenY = (camPos.y * f) / -camPos.z * (height / 2) + (height / 2);
-    return { x: screenX, y: height - screenY }; // Y invertieren für Screen-Space
-}
-
-// ==========================================
-// 4. ENGINE STANDARD COMPONENTS (Camera, Mesh, FPS)
-// ==========================================
-class CameraComponent extends Component {
-    constructor() {
-        super();
-        this.fov = 75;
+    project(p){
+        let f=300/-p.z;
+        return {
+            x:this.canvas.width/2+p.x*f,
+            y:this.canvas.height/2-p.y*f
+        };
     }
-    getViewMatrix() {
-        let pos = this.gameObject.transform.position;
-        let rot = this.gameObject.transform.rotation; // x = pitch, y = yaw
+}
 
-        // Berechne Blickrichtung basierend auf Rotationen
-        let forward = new Vector3(
-            Math.sin(rot.y) * Math.cos(rot.x),
-            Math.sin(rot.x),
-            -Math.cos(rot.y) * Math.cos(rot.x)
+/* =========================
+   5. CAMERA
+========================= */
+
+class Camera extends Component{
+    getView(){
+        let p=this.gameObject.transform.position;
+        let r=this.gameObject.transform.rotation;
+
+        let forward=new Vector3(
+            Math.sin(r.y),
+            Math.sin(r.x),
+            -Math.cos(r.y)
         );
-        let target = pos.add(forward);
-        let up = new Vector3(0, 1, 0);
-        return Matrix4.LookAt(pos, target, up);
+
+        return Matrix4.lookAt(p,p.add(forward),new Vector3(0,1,0));
     }
 }
 
-class BoxMeshComponent extends Component {
-    constructor(color = "#ff0000", size = new Vector3(1, 2, 1)) {
+/* =========================
+   6. SIMPLE RENDER OBJECT
+========================= */
+
+class Cube extends Component{
+    constructor(color="#ff0000"){
         super();
-        this.color = color;
-        this.size = size;
+        this.color=color;
     }
-    render(ctx, viewMatrix, fov, aspect) {
-        let pos = this.gameObject.transform.position;
-        let hx = this.size.x / 2, hy = this.size.y / 2, hz = this.size.z / 2;
 
-        // 8 Eckpunkte der Box generieren
-        let localVertices = [
-            new Vector3(-hx, -hy, -hz), new Vector3(hx, -hy, -hz),
-            new Vector3(hx, hy, -hz), new Vector3(-hx, hy, -hz),
-            new Vector3(-hx, -hy, hz), new Vector3(hx, -hy, hz),
-            new Vector3(hx, hy, hz), new Vector3(-hx, hy, hz)
-        ];
+    render(ctx,view,engine){
+        let p=this.gameObject.transform.position;
 
-        let screenPoints = localVertices.map(v => {
-            let worldV = pos.add(v);
-            let camV = viewMatrix.transformVector(worldV);
-            if (camV.z >= 0) return null;
-            return projectToScreen(camV, fov, aspect, ctx.canvas.width, ctx.canvas.height);
-        });
+        let s=view.transform(p);
+        if(s.z>0) return;
 
-        // Kantenverbindungen (Indices)
-        let edges = [, [1,2], [2,3], [3,0], // Front, [5,6], [6,7], [7,4], // Back, [1,5], [2,6], [3,7]  // Verbindungen
-        ];
+        let proj=engine.project(s);
 
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        edges.forEach(e => {
-            let p1 = screenPoints[e[0]];
-            let p2 = screenPoints[e[1]];
-            if (p1 && p2) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
-            }
-        });
+        ctx.fillStyle=this.color;
+        ctx.fillRect(proj.x-10,proj.y-10,20,20);
     }
 }
 
-// Custom Gameplay Script im Unity-Stil (Steuerung & Physik)
-class PlayerController extends Component {
-    constructor() {
+/* =========================
+   7. PLAYER CONTROLLER
+========================= */
+
+class PlayerController extends Component{
+    constructor(){
         super();
-        this.keys = {};
-        this.velY = 0;
-        this.onGround = true;
-        this.health = 100;
-        this.speed = 8;
-        this.gravity = -15;
+        this.keys={};
 
-        // Pointer Lock & Maus-System
-        document.body.addEventListener("click", () => document.body.requestPointerLock());
-        window.addEventListener("keydown", e => this.keys[e.key.toLowerCase()] = true);
-        window.addEventListener("keyup", e => this.keys[e.key.toLowerCase()] = false);
-        
-        document.addEventListener("mousemove", (e) => {
-            if (document.pointerLockElement !== document.body) return;
-            let tf = this.gameObject.transform;
-            tf.rotation.y -= e.movementX * 0.002; // Yaw
-tf.rotation.x -= e.movementY * 0.002; // Pitch
-tf.rotation.x = Math.max(-1.2, Math.min(1.2, tf.rotation.x)); // Clamp Look
-});
+        document.addEventListener("keydown",e=>this.keys[e.key]=true);
+        document.addEventListener("keyup",e=>this.keys[e.key]=false);
+
+        document.body.onclick=()=>document.body.requestPointerLock();
+    }
+
+    update(dt){
+        let t=this.gameObject.transform;
+
+        if(this.keys["w"]) t.position.z-=dt*5;
+        if(this.keys["s"]) t.position.z+=dt*5;
+        if(this.keys["a"]) t.position.x-=dt*5;
+        if(this.keys["d"]) t.position.x+=dt*5;
+    }
 }
 
-update(deltaTime) {
-let tf = this.gameObject.transform;
+/* =========================
+   8. EDITOR SYSTEM
+========================= */
 
-// 1. Gravity & Sprung
-if (this.keys[" "] && this.onGround) {
-this.velY = 6;
-this.onGround = false;
-}
-this.velY += this.gravity * deltaTime;
-tf.position.y += this.velY * deltaTime;
+let selected=null;
+let running=true;
 
-if (tf.position.y <= 1.8) { // Auge auf 1.8m Höhe halten
-tf.position.y = 1.8;
-this.velY = 0;
-this.onGround = true;
+function log(msg){
+    let c=document.getElementById("console");
+    if(c) c.innerHTML+=msg+"<br>";
 }
 
-// 2. FPS Movement Richtungsberechnung
-let moveDir = new Vector3();
-if (this.keys["w"]) moveDir.z -= 1;
-if (this.keys["s"]) moveDir.z += 1;
-if (this.keys["a"]) moveDir.x -= 1;
-if (this.keys["d"]) moveDir.x += 1;
+/* HIERARCHY */
+function updateHierarchy(engine){
+    let el=document.getElementById("hierarchy");
+    if(!el) return;
 
-if (moveDir.length() > 0) {
-moveDir = moveDir.normalize();
-// In Blickrichtung rotieren (nur um die Y-Achse / Yaw)
-let cosY = Math.cos(tf.rotation.y);
-let sinY = Math.sin(tf.rotation.y);
-let worldMove = new Vector3(
-moveDir.x * cosY + moveDir.z * sinY,
-0,
--moveDir.x * sinY + moveDir.z * cosY
-);
-tf.position = tf.position.add(worldMove.scale(this.speed * deltaTime));
+    el.innerHTML="<h3>Hierarchy</h3>";
+
+    engine.scene.gameObjects.forEach(go=>{
+        let div=document.createElement("div");
+        div.className="item";
+        div.innerText=go.name;
+
+        if(selected===go) div.classList.add("selected");
+
+        div.onclick=()=>{
+            selected=go;
+            updateInspector();
+            updateHierarchy(engine);
+        };
+
+        el.appendChild(div);
+    });
 }
 
-// 3. UI Updates via Text / DOM
-document.getElementById("coords").innerText =
-X: ${tf.position.x.toFixed(2)} | Y: ${tf.position.y.toFixed(2)} | Z: ${tf.position.z.toFixed(2)};
+/* INSPECTOR */
+function updateInspector(){
+    let el=document.getElementById("inspector");
+    if(!el) return;
+
+    if(!selected){
+        el.innerHTML="<h3>Inspector</h3>";
+        return;
+    }
+
+    let t=selected.transform;
+
+    el.innerHTML=`
+    <h3>Inspector</h3>
+    <h4>${selected.name}</h4>
+    <input id="px" value="${t.position.x}">
+    <input id="py" value="${t.position.y}">
+    <input id="pz" value="${t.position.z}">
+    `;
+
+    el.oninput=()=>{
+        t.position.x=parseFloat(px.value);
+        t.position.y=parseFloat(py.value);
+        t.position.z=parseFloat(pz.value);
+    };
 }
+
+/* HOOK ENGINE */
+function hookEditor(engine){
+
+    let old=engine.loop.bind(engine);
+
+    engine.loop=function(t){
+        if(running){
+            old(t);
+        } else {
+            requestAnimationFrame(x=>engine.loop(x));
+        }
+
+        updateHierarchy(engine);
+        updateInspector();
+    };
+
+    log("Editor loaded");
 }
 
-// ==========================================
-// 5. APPLICATION SETUP (Szene aufbauen)
-// ==========================================
-const core = new EngineCore();
+/* =========================
+   9. BUILD SCENE
+========================= */
 
-// Player Setup (GameObject mit Kamera & Logik)
-const playerGo = new GameObject("Player");
-playerGo.transform.position.set(0, 1.8, 5); // Startposition
-const cam = playerGo.addComponent(new CameraComponent());
-playerGo.addComponent(new PlayerController());
-core.currentScene.add(playerGo);
-core.mainCamera = cam;
+const engine=new EngineCore();
 
-// Gegner Setup (GameObjects mit BoxMeshes)
-const enemy1 = new GameObject("Enemy_Red");
-enemy1.transform.position.set(3, 1, -8);
-enemy1.addComponent(new BoxMeshComponent("#ff3333", new Vector3(1, 2, 1)));
-core.currentScene.add(enemy1);
+/* PLAYER */
+const player=new GameObject("Player");
+player.transform.position=new Vector3(0,1,5);
 
-const enemy2 = new GameObject("Enemy_Green");
-enemy2.transform.position.set(-4, 1, -12);
-enemy2.addComponent(new BoxMeshComponent("#33ff33", new Vector3(1.2, 2.4, 1.2)));
-core.currentScene.add(enemy2);
+player.addComponent(new Camera());
+player.addComponent(new PlayerController());
 
-// Engine starten
-core.start();
+engine.scene.add(player);
+engine.camera=player.getComponent(Camera);
 
+/* OBJECTS */
+for(let i=0;i<5;i++){
+    let box=new GameObject("Cube "+i);
+    box.transform.position=new Vector3(i*2,0,-5);
+    box.addComponent(new Cube("#ff4444"));
+    engine.scene.add(box);
+}
+
+/* START */
+engine.start();
+
+/* EDITOR */
+hookEditor(engine);
