@@ -1,194 +1,187 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<title>3D Zelda World</title>
-
-<style>
-body { margin: 0; overflow: hidden; background: black; }
-canvas { display: block; }
-#info {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  color: white;
-  font-family: sans-serif;
-  background: rgba(0,0,0,0.5);
-  padding: 8px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Geometrie Spiel</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            user-select: none;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        #coordinates {
+            color: white;
+            font-size: 20px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        #progress-container {
+            width: 300px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid white;
+        }
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #00ffcc;
+            transition: width 0.1s linear;
+        }
+        #win-message {
+            display: none;
+            color: #00ffcc;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.9);
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+    </style>
+    <!-- Three.js Bibliothek einbinden -->
+    <script src="https://cloudflare.com"></script>
 </head>
-
 <body>
-<div id="info">WASD bewegen • Maus schauen • Klick zum starten</div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <div id="ui">
+        <div id="coordinates">X: 0.0 | Y: 0.0 | Z: 0.0</div>
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div id="win-message">GESCHAFFT!</div>
+    </div>
 
-<script>
-// ==========================
-// BASIC SETUP
-// ==========================
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x88cc88, 50, 200);
+    <script>
+        // --- 1. SETUP SZENE, KAMERA & RENDERER ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
 
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+        // --- 2. LICHT ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
 
-// ==========================
-// LIGHT
-// ==========================
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(50, 100, 50);
-scene.add(light);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
 
-scene.add(new THREE.AmbientLight(0x88aa88, 0.4));
+        // --- 3. OBJEKTE (SPIELFELD & SPIELER) ---
+        // Langer Boden für die automatische Bewegung
+        const floorGeo = new THREE.BoxGeometry(150, 1, 10);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x16213e });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.set(50, -0.5, 0); // Zentriert auf der Strecke bis 100
+        scene.add(floor);
 
-// ==========================
-// WORLD (BIG GRASS PLANE)
-// ==========================
-const SIZE = 500;
+        // Grid/Gitter auf dem Boden zur besseren Bewegungswahrnehmung
+        const gridHelper = new THREE.GridHelper(150, 150, 0x00ffcc, 0x444444);
+        gridHelper.position.set(50, 0.01, 0);
+        scene.add(gridHelper);
 
-const groundGeo = new THREE.PlaneGeometry(SIZE, SIZE, 100, 100);
+        // Spieler (Würfel)
+        const playerGeo = new THREE.BoxGeometry(1, 1, 1);
+        const playerMat = new THREE.MeshStandardMaterial({ color: 0xe94560, roughness: 0.2 });
+        const player = new THREE.Mesh(playerGeo, playerMat);
+        player.position.set(0, 0.5, 0); // Startposition auf dem Boden
+        scene.add(player);
 
-// leichte Höhen (Zelda-style Hügel)
-const pos = groundGeo.attributes.position;
+        // --- 4. SPIEL-VARIABLEN ---
+        const speed = 0.15;        // Automatische Vorwärtsgeschwindigkeit
+        let velocityY = 0;        // Vertikale Geschwindigkeit für den Sprung
+        const gravity = -0.012;   // Schwerkraft nach unten
+        const jumpForce = 0.32;   // Stärke des Sprungs
+        let isGrounded = true;    // Prüft, ob der Spieler den Boden berührt
+        let hasWon = false;       // Spielstatus
+        const targetX = 100;      // Ziel-Koordinate für 100%
 
-for (let i = 0; i < pos.count; i++) {
-  const x = pos.getX(i);
-  const y = pos.getY(i);
-  const height = Math.sin(x * 0.05) * Math.cos(y * 0.05) * 2;
-  pos.setZ(i, height);
-}
+        // DOM Elemente für die UI
+        const coordsElement = document.getElementById('coordinates');
+        const progressBar = document.getElementById('progress-bar');
+        const progressContainer = document.getElementById('progress-container');
+        const winMessage = document.getElementById('win-message');
 
-groundGeo.computeVertexNormals();
+        // --- 5. STEUERUNG (MAUSKLICK) ---
+        window.addEventListener('mousedown', () => {
+            // Springen nur erlaubt, wenn am Boden und Spiel nicht gewonnen
+            if (isGrounded && !hasWon) {
+                velocityY = jumpForce;
+                isGrounded = false;
+            }
+        });
 
-const groundMat = new THREE.MeshLambertMaterial({ color: 0x3aa655 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
+        // --- 6. GAME LOOP (ANIMATION) ---
+        function animate() {
+            requestAnimationFrame(animate);
 
-// ==========================
-// TREES (SIMPLE INSTANCES)
-// ==========================
-function createTree(x, z) {
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.5, 0.5, 3),
-    new THREE.MeshLambertMaterial({ color: 0x8b5a2b })
-  );
+            if (!hasWon) {
+                // Automatische Vorwärtsbewegung (X-Achse)
+                player.position.x += speed;
 
-  const leaves = new THREE.Mesh(
-    new THREE.SphereGeometry(2),
-    new THREE.MeshLambertMaterial({ color: 0x1f6b2a })
-  );
+                // Schwerkraft und Sprung-Physik (Y-Achse)
+                velocityY += gravity;
+                player.position.y += velocityY;
 
-  const group = new THREE.Group();
-  trunk.position.y = 1.5;
-  leaves.position.y = 4;
+                // Kollision mit dem Boden (Y = 0.5 wegen halber Würfelhöhe)
+                if (player.position.y <= 0.5) {
+                    player.position.y = 0.5;
+                    velocityY = 0;
+                    isGrounded = true;
+                }
 
-  group.add(trunk);
-  group.add(leaves);
+                // Fortschritt berechnen
+                let progress = Math.min((player.position.x / targetX) * 100, 100);
+                progressBar.style.width = progress + '%';
 
-  group.position.set(x, 0, z);
-  scene.add(group);
-}
+                // Live-Koordinaten runden und anzeigen
+                coordsElement.innerHTML = `X: ${player.position.x.toFixed(1)} | Y: ${player.position.y.toFixed(1)} | Z: ${player.position.z.toFixed(1)}`;
 
-// viele Bäume
-for (let i = 0; i < 200; i++) {
-  const x = (Math.random() - 0.5) * SIZE;
-  const z = (Math.random() - 0.5) * SIZE;
+                // Gewinn-Bedingung prüfen
+                if (player.position.x >= targetX) {
+                    hasWon = true;
+                    progressContainer.style.display = 'none'; // Balken verschwindet
+                    winMessage.style.display = 'block';       // "GESCHAFFT!" wird angezeigt
+                }
+            } else {
+                // Sanftes Auslaufen nach dem Sieg
+                player.position.x += speed * 0.1;
+            }
 
-  if (Math.abs(x) < 20 && Math.abs(z) < 20) continue; // spawn area frei
-  createTree(x, z);
-}
+            // Kamera folgt dem Spieler fließend
+            camera.position.x = player.position.x + 4;
+            camera.position.y = player.position.y + 4;
+            camera.position.z = player.position.z + 8;
+            camera.lookAt(player.position.x + 2, player.position.y, player.position.z);
 
-// ==========================
-// PLAYER CAMERA (FPS STYLE)
-// ==========================
-camera.position.set(0, 5, 10);
+            renderer.render(scene, camera);
+        }
 
-let keys = {};
-let rotationX = 0;
-let rotationY = 0;
+        // --- 7. FENSTERGRÖSSE ANPASSEN ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-
-// Pointer Lock
-document.body.addEventListener("click", () => {
-  document.body.requestPointerLock();
-});
-
-document.addEventListener("mousemove", (e) => {
-  if (document.pointerLockElement === document.body) {
-    rotationY -= e.movementX * 0.002;
-    rotationX -= e.movementY * 0.002;
-    rotationX = Math.max(-1.5, Math.min(1.5, rotationX));
-  }
-});
-
-// ==========================
-// MOVE SYSTEM
-// ==========================
-function updatePlayer() {
-  const speed = 0.5;
-
-  const dir = new THREE.Vector3();
-
-  if (keys["w"]) dir.z -= 1;
-  if (keys["s"]) dir.z += 1;
-  if (keys["a"]) dir.x -= 1;
-  if (keys["d"]) dir.x += 1;
-
-  dir.normalize();
-
-  // rotate movement by camera direction
-  const forward = new THREE.Vector3(
-    Math.sin(rotationY),
-    0,
-    Math.cos(rotationY)
-  );
-
-  const right = new THREE.Vector3(
-    Math.cos(rotationY),
-    0,
-    -Math.sin(rotationY)
-  );
-
-  camera.position.addScaledVector(forward, -dir.z * speed);
-  camera.position.addScaledVector(right, dir.x * speed);
-
-  camera.position.y = 5;
-
-  camera.rotation.x = rotationX;
-  camera.rotation.y = rotationY;
-}
-
-// ==========================
-// LOOP
-// ==========================
-function animate() {
-  requestAnimationFrame(animate);
-  updatePlayer();
-  renderer.render(scene, camera);
-}
-
-animate();
-
-// resize
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-</script>
-
+        // Start des Spiels
+        animate();
+    </script>
 </body>
 </html>
