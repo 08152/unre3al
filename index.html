@@ -2,57 +2,193 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Mini Unity 3D Engine</title>
+<title>3D Zelda World</title>
 
-<!-- CSS -->
-<link rel="stylesheet" href="style.css">
+<style>
+body { margin: 0; overflow: hidden; background: black; }
+canvas { display: block; }
+#info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: white;
+  font-family: sans-serif;
+  background: rgba(0,0,0,0.5);
+  padding: 8px;
+}
+</style>
 </head>
 
 <body>
+<div id="info">WASD bewegen • Maus schauen • Klick zum starten</div>
 
-<!-- =========================
-     TOP TOOLBAR (Unity Style)
-========================= -->
-<div id="topbar">
-    <button onclick="running = true">▶ Play</button>
-    <button onclick="running = false">⏸ Pause</button>
-    <button onclick="location.reload()">⏹ Stop</button>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
-    <span id="state" style="margin-left:10px;">Idle</span>
-</div>
+<script>
+// ==========================
+// BASIC SETUP
+// ==========================
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x88cc88, 50, 200);
 
-<!-- =========================
-     MAIN EDITOR LAYOUT
-========================= -->
-<div id="container">
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
 
-    <!-- LEFT: HIERARCHY -->
-    <div id="hierarchy">
-        <h3>Hierarchy</h3>
-    </div>
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-    <!-- CENTER: GAME VIEW -->
-    <div id="gameview">
-        <canvas id="gameCanvas"></canvas>
-    </div>
+// ==========================
+// LIGHT
+// ==========================
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(50, 100, 50);
+scene.add(light);
 
-    <!-- RIGHT: INSPECTOR -->
-    <div id="inspector">
-        <h3>Inspector</h3>
-        <p>No Selection</p>
-    </div>
+scene.add(new THREE.AmbientLight(0x88aa88, 0.4));
 
-</div>
+// ==========================
+// WORLD (BIG GRASS PLANE)
+// ==========================
+const SIZE = 500;
 
-<!-- =========================
-     CONSOLE
-========================= -->
-<div id="console"></div>
+const groundGeo = new THREE.PlaneGeometry(SIZE, SIZE, 100, 100);
 
-<!-- =========================
-     ENGINE
-========================= -->
-<script src="engine.js"></script>
+// leichte Höhen (Zelda-style Hügel)
+const pos = groundGeo.attributes.position;
+
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i);
+  const y = pos.getY(i);
+  const height = Math.sin(x * 0.05) * Math.cos(y * 0.05) * 2;
+  pos.setZ(i, height);
+}
+
+groundGeo.computeVertexNormals();
+
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x3aa655 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+// ==========================
+// TREES (SIMPLE INSTANCES)
+// ==========================
+function createTree(x, z) {
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 3),
+    new THREE.MeshLambertMaterial({ color: 0x8b5a2b })
+  );
+
+  const leaves = new THREE.Mesh(
+    new THREE.SphereGeometry(2),
+    new THREE.MeshLambertMaterial({ color: 0x1f6b2a })
+  );
+
+  const group = new THREE.Group();
+  trunk.position.y = 1.5;
+  leaves.position.y = 4;
+
+  group.add(trunk);
+  group.add(leaves);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+}
+
+// viele Bäume
+for (let i = 0; i < 200; i++) {
+  const x = (Math.random() - 0.5) * SIZE;
+  const z = (Math.random() - 0.5) * SIZE;
+
+  if (Math.abs(x) < 20 && Math.abs(z) < 20) continue; // spawn area frei
+  createTree(x, z);
+}
+
+// ==========================
+// PLAYER CAMERA (FPS STYLE)
+// ==========================
+camera.position.set(0, 5, 10);
+
+let keys = {};
+let rotationX = 0;
+let rotationY = 0;
+
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+// Pointer Lock
+document.body.addEventListener("click", () => {
+  document.body.requestPointerLock();
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (document.pointerLockElement === document.body) {
+    rotationY -= e.movementX * 0.002;
+    rotationX -= e.movementY * 0.002;
+    rotationX = Math.max(-1.5, Math.min(1.5, rotationX));
+  }
+});
+
+// ==========================
+// MOVE SYSTEM
+// ==========================
+function updatePlayer() {
+  const speed = 0.5;
+
+  const dir = new THREE.Vector3();
+
+  if (keys["w"]) dir.z -= 1;
+  if (keys["s"]) dir.z += 1;
+  if (keys["a"]) dir.x -= 1;
+  if (keys["d"]) dir.x += 1;
+
+  dir.normalize();
+
+  // rotate movement by camera direction
+  const forward = new THREE.Vector3(
+    Math.sin(rotationY),
+    0,
+    Math.cos(rotationY)
+  );
+
+  const right = new THREE.Vector3(
+    Math.cos(rotationY),
+    0,
+    -Math.sin(rotationY)
+  );
+
+  camera.position.addScaledVector(forward, -dir.z * speed);
+  camera.position.addScaledVector(right, dir.x * speed);
+
+  camera.position.y = 5;
+
+  camera.rotation.x = rotationX;
+  camera.rotation.y = rotationY;
+}
+
+// ==========================
+// LOOP
+// ==========================
+function animate() {
+  requestAnimationFrame(animate);
+  updatePlayer();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// resize
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
 
 </body>
 </html>
