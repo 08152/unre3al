@@ -1,0 +1,64 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    background-color: #87cfff;
+    font-family: Arial, sans-serif;
+    user-select: none;
+}
+
+#gameCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    pointer-events: none;
+}
+#crosshair:before, #crosshair:after {
+    content: "";
+    position: absolute;
+    background: white;
+}
+#crosshair:before { width: 2px; height: 10px; left: 4px; }
+#crosshair:after { width: 10px; height: 2px; top: 4px; }
+
+#coords {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    color: white;
+    font-size: 13px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 6px 12px;
+    border-radius: 6px;
+    pointer-events: none;
+}
+
+#healthBar {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 220px;
+    height: 18px;
+    border: 2px solid white;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+#healthFill {
+    width: 100%;
+    height: 100%;
+    background: #1e90ff;
+    transition: width 0.1s ease;
+}
